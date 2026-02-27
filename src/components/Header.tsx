@@ -2,18 +2,15 @@
  * Header – site-wide navigation bar.
  *
  * Renders differently based on auth state:
- *   • Signed out → "Sign in" button
- *   • Signed in  → navigation link to Dashboard + Clerk UserButton
+ *   - Signed out: "Sign in" button
+ *   - Signed in: "Explore" link (home), "Dashboard" link, Clerk UserButton
  *
- * Accessibility:
- *   • Uses semantic <header> and <nav> elements.
- *   • All interactive elements are keyboard-accessible by default
- *     (native <a> and <button> elements).
- *   • `aria-label` on the nav for screen readers.
+ * Uses `usePathname` to highlight the active navigation link.
  */
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   SignedIn,
   SignedOut,
@@ -22,6 +19,8 @@ import {
 } from "@clerk/nextjs";
 
 export default function Header() {
+  const pathname = usePathname();
+
   return (
     <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/80 backdrop-blur-md">
       <nav
@@ -37,11 +36,25 @@ export default function Header() {
         </Link>
 
         {/* ---- Right side ---- */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-5">
           <SignedIn>
             <Link
+              href="/"
+              className={`text-sm font-medium transition-colors ${
+                pathname === "/"
+                  ? "text-indigo-600"
+                  : "text-gray-600 hover:text-indigo-600"
+              }`}
+            >
+              Explore
+            </Link>
+            <Link
               href="/dashboard"
-              className="text-sm font-medium text-gray-700 transition-colors hover:text-indigo-600"
+              className={`text-sm font-medium transition-colors ${
+                pathname.startsWith("/dashboard")
+                  ? "text-indigo-600"
+                  : "text-gray-600 hover:text-indigo-600"
+              }`}
             >
               Dashboard
             </Link>

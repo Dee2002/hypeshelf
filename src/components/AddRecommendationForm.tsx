@@ -156,7 +156,7 @@ export default function AddRecommendationForm({
   return (
     <dialog
       ref={dialogRef}
-      className="w-full max-w-lg rounded-2xl border-0 p-0 shadow-xl backdrop:bg-black/50"
+      className="fixed inset-0 m-auto h-fit w-full max-w-lg rounded-2xl border-0 p-0 shadow-xl backdrop:bg-black/50"
       aria-label="Add a recommendation"
     >
       <div className="p-6">

@@ -212,6 +212,91 @@ export const listAuthenticated = query({
   },
 });
 
+/**
+ * listMyRecommendations – returns only the current user's recommendations.
+ *
+ * Used on the dashboard "My Recommendations" tab so users can manage
+ * their own content. Includes soft-deleted items count for stats.
+ */
+export const listMyRecommendations = query({
+  args: {
+    genre: v.optional(v.string()),
+    paginationOpts: v.optional(
+      v.object({
+        cursor: v.optional(v.string()),
+        numItems: v.optional(v.number()),
+      })
+    ),
+  },
+  handler: async (ctx, { genre, paginationOpts }) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Unauthorized: must be signed in.");
+    }
+
+    const numItems = Math.min(
+      paginationOpts?.numItems ?? DEFAULT_PAGE_SIZE,
+      100
+    );
+
+    // Use the by_creator index to fetch only this user's recommendations.
+    const results = await ctx.db
+      .query("recommendations")
+      .withIndex("by_creator", (q: any) => q.eq("createdBy", identity.subject))
+      .order("desc")
+      .paginate({
+        cursor: paginationOpts?.cursor ?? null,
+        numItems,
+      });
+
+    // Filter by genre client-side (secondary filter after index).
+    let page = results.page.filter((r: any) => !r.deletedAt);
+    if (genre && GENRES.includes(genre as (typeof GENRES)[number])) {
+      page = page.filter((r: any) => r.genre === genre);
+    }
+
+    return {
+      page,
+      continueCursor: results.continueCursor,
+      isDone: results.isDone,
+    };
+  },
+});
+
+/**
+ * getMyStats – returns aggregate stats for the current user's recommendations.
+ */
+export const getMyStats = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Unauthorized: must be signed in.");
+    }
+
+    const allMine = await ctx.db
+      .query("recommendations")
+      .withIndex("by_creator", (q: any) => q.eq("createdBy", identity.subject))
+      .collect();
+
+    const active = allMine.filter((r: any) => !r.deletedAt);
+    const staffPicks = active.filter((r: any) => r.isStaffPick);
+
+    // Count genres for breakdown.
+    const genreCounts: Record<string, number> = {};
+    for (const rec of active) {
+      genreCounts[rec.genre] = (genreCounts[rec.genre] || 0) + 1;
+    }
+
+    return {
+      totalActive: active.length,
+      totalDeleted: allMine.length - active.length,
+      staffPickCount: staffPicks.length,
+      genreCounts,
+    };
+  },
+});
+
 /* ------------------------------------------------------------------ */
 /*  Mutations                                                          */
 /* ------------------------------------------------------------------ */
