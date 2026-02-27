@@ -111,7 +111,6 @@ export const seedData = mutation({
     // Check if data already exists to prevent duplicate seeding.
     const existing = await ctx.db
       .query("recommendations")
-      .withIndex("by_creation")
       .first();
 
     if (existing) {

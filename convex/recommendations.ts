@@ -124,9 +124,8 @@ export const listPublic = query({
         .query("recommendations")
         .withIndex("by_genre", (q: any) => q.eq("genre", genre));
     } else {
-      baseQuery = ctx.db
-        .query("recommendations")
-        .withIndex("by_creation");
+      // No index needed — Convex table scan is ordered by _creationTime.
+      baseQuery = ctx.db.query("recommendations");
     }
 
     const results = await baseQuery
@@ -192,9 +191,8 @@ export const listAuthenticated = query({
         .query("recommendations")
         .withIndex("by_genre", (q: any) => q.eq("genre", genre));
     } else {
-      baseQuery = ctx.db
-        .query("recommendations")
-        .withIndex("by_creation");
+      // No index needed — Convex table scan is ordered by _creationTime.
+      baseQuery = ctx.db.query("recommendations");
     }
 
     const results = await baseQuery

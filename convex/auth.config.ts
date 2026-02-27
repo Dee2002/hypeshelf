@@ -5,14 +5,15 @@
  * Clerk application.  At runtime Convex will validate the JWT `iss`
  * claim against this value.
  *
- * Security note: the actual Clerk Publishable Key and JWT issuer URL
- * are read from env vars set in the Convex dashboard – never hard-coded.
+ * Security note: the domain is derived from the Clerk publishable key
+ * and is NOT a secret.  For production deployments, consider moving
+ * this to a Convex environment variable via the dashboard.
  */
 
 export default {
   providers: [
     {
-      domain: process.env.CLERK_JWT_ISSUER_DOMAIN,
+      domain: process.env.CLERK_JWT_ISSUER_DOMAIN ?? "https://driven-stud-65.clerk.accounts.dev",
       applicationID: "convex",
     },
   ],

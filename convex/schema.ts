@@ -37,14 +37,14 @@ export default defineSchema({
     isStaffPick: v.boolean(),
     deletedAt: v.optional(v.number()),
   })
-    // Public listing sorted newest-first
-    .index("by_creation", ["_creationTime"])
-    // Filter by genre
-    .index("by_genre", ["genre", "_creationTime"])
+    // Filter by genre (Convex auto-appends _creationTime for ordering).
+    // For "all recommendations" queries we scan the table directly
+    // (no index needed — Convex supports .order("desc") on the table).
+    .index("by_genre", ["genre"])
     // Filter by owner (for "my recommendations")
-    .index("by_creator", ["createdBy", "_creationTime"])
+    .index("by_creator", ["createdBy"])
     // Soft-delete filter
-    .index("by_deletedAt", ["deletedAt", "_creationTime"]),
+    .index("by_deletedAt", ["deletedAt"]),
 
   /**
    * users – synced from Clerk via webhook or on first sign-in.
