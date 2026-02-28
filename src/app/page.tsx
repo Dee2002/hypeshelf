@@ -26,6 +26,7 @@ import { api } from "../../convex/_generated/api";
 import type { Genre } from "@/types";
 import GenreFilter from "@/components/GenreFilter";
 import RecommendationCard from "@/components/RecommendationCard";
+import RecommendationDetail from "@/components/RecommendationDetail";
 import AddRecommendationForm from "@/components/AddRecommendationForm";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import EmptyState from "@/components/EmptyState";
@@ -33,6 +34,7 @@ import EmptyState from "@/components/EmptyState";
 export default function HomePage() {
   const [genre, setGenre] = useState<Genre | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [selectedRec, setSelectedRec] = useState<any | null>(null);
 
   const result = useQuery(api.recommendations.listPublic, {
     genre: genre ?? undefined,
@@ -161,6 +163,7 @@ export default function HomePage() {
                   recommendation={rec}
                   currentUserId={null}
                   currentUserRole={null}
+                  onSelect={setSelectedRec}
                 />
               ))}
             </div>
@@ -182,6 +185,12 @@ export default function HomePage() {
       <AddRecommendationForm
         isOpen={isFormOpen}
         onClose={() => setIsFormOpen(false)}
+      />
+      <RecommendationDetail
+        recommendation={selectedRec}
+        onClose={() => setSelectedRec(null)}
+        currentUserId={null}
+        currentUserRole={null}
       />
     </>
   );

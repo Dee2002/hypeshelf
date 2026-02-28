@@ -23,7 +23,7 @@
 "use client";
 
 import { useState, useRef, useEffect, type FormEvent } from "react";
-import { useMutation } from "convex/react";
+import { useConvexAuth, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { GENRE_LABELS, GENRE_LIST, type Genre } from "@/types";
 import { isValidUrl } from "@/lib/utils";
@@ -52,6 +52,7 @@ export default function AddRecommendationForm({
 
   const dialogRef = useRef<HTMLDialogElement>(null);
   const addRec = useMutation(api.recommendations.add);
+  const { isAuthenticated } = useConvexAuth();
 
   // Sync dialog open/close with the `isOpen` prop.
   useEffect(() => {
@@ -124,6 +125,15 @@ export default function AddRecommendationForm({
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setSubmitError(null);
+
+    if (!isAuthenticated) {
+      setSubmitError(
+        "Your session isn't connected to the database yet. " +
+        "Make sure the \"convex\" JWT template exists in your Clerk dashboard, " +
+        "then sign out and sign back in."
+      );
+      return;
+    }
 
     if (!validate()) return;
 

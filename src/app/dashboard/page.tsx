@@ -1,19 +1,14 @@
 /**
  * Dashboard Page – HypeShelf (Authenticated)
  *
- * Personal management hub for signed-in users. Distinct from the
- * public home page (discovery feed).
+ * Personal management hub. Uses `listAuthenticated` and filters
+ * client-side.
  *
- * Layout:
- *   1. Welcome header with add button.
- *   2. Stats cards (loaded independently — shows "–" while loading).
- *   3. Tabs: "My Recommendations" / "All Recommendations".
- *   4. Genre filter + grid.
- *
- * Loading strategy: page structure (header, stats placeholders, tabs,
- * genre filter) renders immediately. Only the recommendation grid
- * shows a spinner while its data loads. This prevents the
- * blank-page-with-infinite-spinner problem.
+ * Loading strategy:
+ *   - While Convex auth is resolving → brief spinner.
+ *   - Auth failed / not signed in → message (shouldn't happen, middleware guards).
+ *   - Auth OK, query loading → brief spinner.
+ *   - Auth OK, query returned → show data or empty state. Never spins forever.
  */
 "use client";
 
@@ -26,6 +21,7 @@ import { GENRE_LABELS } from "@/types";
 import GenreFilter from "@/components/GenreFilter";
 import RecommendationCard from "@/components/RecommendationCard";
 import AddRecommendationForm from "@/components/AddRecommendationForm";
+import RecommendationDetail from "@/components/RecommendationDetail";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import EmptyState from "@/components/EmptyState";
 
@@ -35,6 +31,7 @@ export default function DashboardPage() {
   const [genre, setGenre] = useState<Genre | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("mine");
+  const [selectedRec, setSelectedRec] = useState<any | null>(null);
 
   const { isAuthenticated } = useConvexAuth();
   const { user: clerkUser } = useUser();
@@ -44,42 +41,60 @@ export default function DashboardPage() {
     isAuthenticated ? {} : "skip"
   );
 
-  const myStats = useQuery(
-    api.recommendations.getMyStats,
-    isAuthenticated ? {} : "skip"
-  );
-
-  const myRecs = useQuery(
-    api.recommendations.listMyRecommendations,
-    isAuthenticated && activeTab === "mine"
-      ? { genre: genre ?? undefined }
-      : "skip"
-  );
-
-  const allRecs = useQuery(
+  const allResult = useQuery(
     api.recommendations.listAuthenticated,
-    isAuthenticated && activeTab === "all"
-      ? { genre: genre ?? undefined }
-      : "skip"
+    isAuthenticated ? { genre: genre ?? undefined } : "skip"
   );
-
-  const result = activeTab === "mine" ? myRecs : allRecs;
-
-  // Only the grid content waits — page structure is always visible.
-  const isGridLoading = !isAuthenticated || result === undefined;
 
   const currentUserRole = currentUser?.role ?? "user";
   const currentUserId = clerkUser?.id ?? null;
   const userName = clerkUser?.firstName ?? currentUser?.name ?? null;
 
-  // Top genre from stats.
+  // Derive filtered views.
+  const allRecs = allResult?.page ?? [];
+  const myRecs = currentUserId
+    ? allRecs.filter((r: any) => r.createdBy === currentUserId)
+    : [];
+  const visibleRecs = activeTab === "mine" ? myRecs : allRecs;
+
+  // Data is ready once the query has returned (even if empty).
+  const dataLoaded = allResult !== undefined;
+  // Show spinner only while waiting — never blocks the full page.
+  const showGridSpinner = !dataLoaded;
+
+  // Stats from loaded data.
+  const staffPickCount = myRecs.filter((r: any) => r.isStaffPick).length;
+  const genreCounts: Record<string, number> = {};
+  for (const rec of myRecs) {
+    genreCounts[(rec as any).genre] =
+      (genreCounts[(rec as any).genre] || 0) + 1;
+  }
   const topGenre =
-    myStats?.genreCounts && Object.keys(myStats.genreCounts).length > 0
-      ? Object.entries(myStats.genreCounts).sort((a, b) => b[1] - a[1])[0]
+    Object.keys(genreCounts).length > 0
+      ? Object.entries(genreCounts).sort((a, b) => b[1] - a[1])[0]
       : null;
 
   return (
     <>
+      {/* ---- Auth warning ---- */}
+      {!isAuthenticated && (
+        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          <strong>Database connection issue:</strong> You&apos;re signed in to
+          Clerk but not connected to Convex. Make sure you have a JWT template
+          named <code className="rounded bg-amber-100 px-1">&quot;convex&quot;</code> in
+          your{" "}
+          <a
+            href="https://dashboard.clerk.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline"
+          >
+            Clerk dashboard
+          </a>{" "}
+          (JWT Templates section), then sign out and sign back in.
+        </div>
+      )}
+
       {/* ---- Page Header ---- */}
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -100,7 +115,6 @@ export default function DashboardPage() {
           type="button"
           onClick={() => setIsFormOpen(true)}
           className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-          aria-label="Add a new recommendation"
         >
           <svg
             className="h-4 w-4"
@@ -120,29 +134,29 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      {/* ---- Stats Bar (always visible, shows "–" while loading) ---- */}
+      {/* ---- Stats Bar ---- */}
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="rounded-lg border border-gray-200 bg-white p-4 text-center shadow-sm">
           <p className="text-2xl font-bold text-gray-900">
-            {myStats ? myStats.totalActive : "–"}
+            {dataLoaded ? myRecs.length : "–"}
           </p>
           <p className="text-xs text-gray-500">My Recs</p>
         </div>
         <div className="rounded-lg border border-gray-200 bg-white p-4 text-center shadow-sm">
           <p className="text-2xl font-bold text-amber-600">
-            {myStats ? myStats.staffPickCount : "–"}
+            {dataLoaded ? staffPickCount : "–"}
           </p>
           <p className="text-xs text-gray-500">Staff Picks</p>
         </div>
         <div className="rounded-lg border border-gray-200 bg-white p-4 text-center shadow-sm">
           <p className="text-2xl font-bold text-gray-900">
-            {myStats ? Object.keys(myStats.genreCounts).length : "–"}
+            {dataLoaded ? Object.keys(genreCounts).length : "–"}
           </p>
           <p className="text-xs text-gray-500">Genres</p>
         </div>
         <div className="rounded-lg border border-gray-200 bg-white p-4 text-center shadow-sm">
           <p className="text-2xl font-bold text-indigo-600 truncate">
-            {myStats
+            {dataLoaded
               ? topGenre
                 ? GENRE_LABELS[topGenre[0] as Genre] ?? topGenre[0]
                 : "–"
@@ -192,10 +206,14 @@ export default function DashboardPage() {
       </section>
 
       {/* ---- Recommendations Grid ---- */}
-      <section aria-label={activeTab === "mine" ? "My recommendations" : "All recommendations"}>
-        {isGridLoading && <LoadingSpinner />}
+      <section
+        aria-label={
+          activeTab === "mine" ? "My recommendations" : "All recommendations"
+        }
+      >
+        {showGridSpinner && <LoadingSpinner />}
 
-        {!isGridLoading && result !== undefined && result.page.length === 0 && (
+        {dataLoaded && visibleRecs.length === 0 && (
           <EmptyState
             message={
               activeTab === "mine"
@@ -209,34 +227,31 @@ export default function DashboardPage() {
           />
         )}
 
-        {!isGridLoading && result !== undefined && result.page.length > 0 && (
-          <>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {result.page.map((rec: any) => (
-                <RecommendationCard
-                  key={rec._id}
-                  recommendation={rec}
-                  currentUserId={currentUserId}
-                  currentUserRole={currentUserRole}
-                />
-              ))}
-            </div>
-
-            {!result.isDone && (
-              <div className="mt-8 text-center">
-                <p className="text-sm text-gray-400">
-                  More recommendations available.
-                </p>
-              </div>
-            )}
-          </>
+        {dataLoaded && visibleRecs.length > 0 && (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {visibleRecs.map((rec: any) => (
+              <RecommendationCard
+                key={rec._id}
+                recommendation={rec}
+                currentUserId={currentUserId}
+                currentUserRole={currentUserRole}
+                onSelect={setSelectedRec}
+              />
+            ))}
+          </div>
         )}
       </section>
 
-      {/* ---- Add Recommendation Modal ---- */}
+      {/* ---- Modals ---- */}
       <AddRecommendationForm
         isOpen={isFormOpen}
         onClose={() => setIsFormOpen(false)}
+      />
+      <RecommendationDetail
+        recommendation={selectedRec}
+        onClose={() => setSelectedRec(null)}
+        currentUserId={currentUserId}
+        currentUserRole={currentUserRole}
       />
     </>
   );

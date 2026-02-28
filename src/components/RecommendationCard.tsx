@@ -1,22 +1,9 @@
 /**
- * RecommendationCard – displays a single recommendation.
+ * RecommendationCard – displays a single recommendation in a grid.
  *
- * Variants:
- *   • Public mode (no `currentUserId`): read-only card.
- *   • Authenticated mode: shows delete button for owner or admin,
- *     shows "Staff Pick" toggle for admin.
- *
- * Design:
- *   • Card layout with subtle shadow and hover lift effect.
- *   • Genre badge in a color matching the genre.
- *   • "Staff Pick" badge shown when applicable.
- *   • External link opens in a new tab with rel="noopener noreferrer"
- *     (security best practice to prevent tab-nabbing).
- *
- * Accessibility:
- *   • Semantic <article> element.
- *   • Buttons have descriptive `aria-label` attributes.
- *   • Focus-visible rings on all interactive elements.
+ * Clicking the card opens a detail modal (via `onSelect` callback).
+ * Action buttons (delete, staff pick) stop propagation so they
+ * don't trigger the card click.
  */
 "use client";
 
@@ -32,16 +19,17 @@ interface RecommendationCardProps {
   recommendation: PublicRecommendation & {
     createdBy?: string;
   };
-  /** Clerk userId of the current viewer (null if not signed in). */
   currentUserId: string | null;
-  /** Role of the current viewer. */
   currentUserRole: UserRole | null;
+  /** Called when the card is clicked — parent opens the detail modal. */
+  onSelect?: (rec: PublicRecommendation & { createdBy?: string }) => void;
 }
 
 export default function RecommendationCard({
   recommendation,
   currentUserId,
   currentUserRole,
+  onSelect,
 }: RecommendationCardProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isTogglingPick, setIsTogglingPick] = useState(false);
@@ -56,10 +44,14 @@ export default function RecommendationCard({
   const canDelete = isOwner || isAdmin;
   const canTogglePick = isAdmin;
 
-  async function handleDelete() {
+  function handleCardClick() {
+    onSelect?.(recommendation);
+  }
+
+  async function handleDelete(e: React.MouseEvent) {
+    e.stopPropagation();
     if (isDeleting) return;
 
-    // Confirmation to prevent accidental deletes.
     const confirmed = window.confirm(
       `Delete "${recommendation.title}"? This cannot be undone.`
     );
@@ -78,7 +70,8 @@ export default function RecommendationCard({
     }
   }
 
-  async function handleTogglePick() {
+  async function handleTogglePick(e: React.MouseEvent) {
+    e.stopPropagation();
     if (isTogglingPick) return;
     setIsTogglingPick(true);
     try {
@@ -95,7 +88,8 @@ export default function RecommendationCard({
 
   return (
     <article
-      className="group relative rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
+      onClick={handleCardClick}
+      className="group relative cursor-pointer rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md"
       aria-label={`Recommendation: ${recommendation.title}`}
     >
       {/* ---- Staff Pick badge ---- */}
@@ -113,41 +107,14 @@ export default function RecommendationCard({
       </span>
 
       {/* ---- Title ---- */}
-      <h3 className="mt-2 text-lg font-semibold text-gray-900">
+      <h3 className="mt-2 text-lg font-semibold text-gray-900 transition-colors group-hover:text-indigo-600">
         {recommendation.title}
       </h3>
 
-      {/* ---- Blurb ---- */}
-      <p className="mt-1 text-sm leading-relaxed text-gray-600">
+      {/* ---- Blurb (truncated) ---- */}
+      <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-gray-600">
         {recommendation.blurb}
       </p>
-
-      {/* ---- Link ---- */}
-      {recommendation.link && (
-        <a
-          href={recommendation.link}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:text-indigo-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-          aria-label={`Visit link for ${recommendation.title} (opens in new tab)`}
-        >
-          Visit link
-          <svg
-            className="h-3.5 w-3.5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-            />
-          </svg>
-        </a>
-      )}
 
       {/* ---- Footer: author + timestamp ---- */}
       <div className="mt-3 flex items-center justify-between border-t border-gray-100 pt-3 text-xs text-gray-500">
