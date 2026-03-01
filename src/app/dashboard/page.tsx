@@ -1,14 +1,10 @@
 /**
  * Dashboard Page – HypeShelf (Authenticated)
  *
- * Personal management hub. Uses `listAuthenticated` and filters
- * client-side.
+ * Personal management hub. Shows only YOUR recommendations with
+ * stats, genre filter, and management controls.
  *
- * Loading strategy:
- *   - While Convex auth is resolving → brief spinner.
- *   - Auth failed / not signed in → message (shouldn't happen, middleware guards).
- *   - Auth OK, query loading → brief spinner.
- *   - Auth OK, query returned → show data or empty state. Never spins forever.
+ * To browse everyone's recommendations, use the Explore (home) page.
  */
 "use client";
 
@@ -25,12 +21,9 @@ import RecommendationDetail from "@/components/RecommendationDetail";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import EmptyState from "@/components/EmptyState";
 
-type Tab = "mine" | "all";
-
 export default function DashboardPage() {
   const [genre, setGenre] = useState<Genre | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<Tab>("mine");
   const [selectedRec, setSelectedRec] = useState<any | null>(null);
 
   const { isAuthenticated } = useConvexAuth();
@@ -43,26 +36,26 @@ export default function DashboardPage() {
 
   const allResult = useQuery(
     api.recommendations.listAuthenticated,
-    isAuthenticated ? { genre: genre ?? undefined } : "skip"
+    isAuthenticated ? {} : "skip"
   );
 
   const currentUserRole = currentUser?.role ?? "user";
   const currentUserId = clerkUser?.id ?? null;
   const userName = clerkUser?.firstName ?? currentUser?.name ?? null;
 
-  // Derive filtered views.
+  // Filter to only the current user's recs, then apply genre filter.
   const allRecs = allResult?.page ?? [];
   const myRecs = currentUserId
     ? allRecs.filter((r: any) => r.createdBy === currentUserId)
     : [];
-  const visibleRecs = activeTab === "mine" ? myRecs : allRecs;
+  const visibleRecs = genre
+    ? myRecs.filter((r: any) => r.genre === genre)
+    : myRecs;
 
-  // Data is ready once the query has returned (even if empty).
   const dataLoaded = allResult !== undefined;
-  // Show spinner only while waiting — never blocks the full page.
   const showGridSpinner = !dataLoaded;
 
-  // Stats from loaded data.
+  // Stats from the user's recs (unfiltered by genre).
   const staffPickCount = myRecs.filter((r: any) => r.isStaffPick).length;
   const genreCounts: Record<string, number> = {};
   for (const rec of myRecs) {
@@ -81,8 +74,9 @@ export default function DashboardPage() {
         <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
           <strong>Database connection issue:</strong> You&apos;re signed in to
           Clerk but not connected to Convex. Make sure you have a JWT template
-          named <code className="rounded bg-amber-100 px-1">&quot;convex&quot;</code> in
-          your{" "}
+          named{" "}
+          <code className="rounded bg-amber-100 px-1">&quot;convex&quot;</code>{" "}
+          in your{" "}
           <a
             href="https://dashboard.clerk.com"
             target="_blank"
@@ -102,7 +96,7 @@ export default function DashboardPage() {
             {userName ? `Welcome back, ${userName}` : "Dashboard"}
           </h1>
           <p className="mt-1 text-sm text-gray-500">
-            Your personal HypeShelf. Manage your recs and track your stats.
+            Your recommendations at a glance.
           </p>
           {currentUser?.role === "admin" && (
             <span className="mt-2 inline-block rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-800">
@@ -166,63 +160,21 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ---- Tabs ---- */}
-      <div className="mb-6 border-b border-gray-200">
-        <nav className="-mb-px flex gap-6" aria-label="Dashboard tabs">
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab("mine");
-              setGenre(null);
-            }}
-            className={`whitespace-nowrap border-b-2 pb-3 text-sm font-medium transition-colors ${
-              activeTab === "mine"
-                ? "border-indigo-600 text-indigo-600"
-                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
-            }`}
-          >
-            My Recommendations
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab("all");
-              setGenre(null);
-            }}
-            className={`whitespace-nowrap border-b-2 pb-3 text-sm font-medium transition-colors ${
-              activeTab === "all"
-                ? "border-indigo-600 text-indigo-600"
-                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
-            }`}
-          >
-            All Recommendations
-          </button>
-        </nav>
-      </div>
-
       {/* ---- Genre Filter ---- */}
       <section className="mb-8" aria-label="Filter by genre">
         <GenreFilter activeGenre={genre} onSelect={setGenre} />
       </section>
 
-      {/* ---- Recommendations Grid ---- */}
-      <section
-        aria-label={
-          activeTab === "mine" ? "My recommendations" : "All recommendations"
-        }
-      >
+      {/* ---- My Recommendations Grid ---- */}
+      <section aria-label="My recommendations">
         {showGridSpinner && <LoadingSpinner />}
 
         {dataLoaded && visibleRecs.length === 0 && (
           <EmptyState
             message={
-              activeTab === "mine"
-                ? genre
-                  ? "You have no recommendations in this genre."
-                  : "You haven't added any recommendations yet. Click \"Add Recommendation\" above to get started!"
-                : genre
-                  ? "No recommendations found for this genre."
-                  : "No recommendations yet. Be the first to add one!"
+              genre
+                ? "You have no recommendations in this genre."
+                : "You haven't added any recommendations yet. Click \"Add Recommendation\" above to get started!"
             }
           />
         )}
